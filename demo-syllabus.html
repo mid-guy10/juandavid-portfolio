@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo | Syllabus Reader</title>
+<style>
+:root{--bg:#fafafa;--card:#fff;--text:#1a1a1a;--muted:#5c5c5c;--accent:#0b6bcb;--border:#e3e3e3}
+@media (prefers-color-scheme:dark){:root{--bg:#111;--card:#1b1b1b;--text:#f0f0f0;--muted:#a0a0a0;--accent:#5aa9ff;--border:#2d2d2d}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+.wrap{max-width:760px;margin:0 auto;padding:30px 20px 60px}
+textarea{width:100%;height:210px;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font:14px/1.5 ui-monospace,monospace}
+button{padding:10px 18px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;margin:8px 8px 8px 0}
+button.alt{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+input{padding:8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);width:90px}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+td,th{border-bottom:1px solid var(--border);padding:8px;text-align:left;font-size:.92rem}
+.muted{color:var(--muted);font-size:.85rem}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<p><a href="index.html">← Volver al portafolio</a></p>
+<h1>Syllabus Reader (demo)</h1>
+<p class="muted">Versión simplificada que corre en tu navegador: pega un sílabo, extrae fechas y horario, y genera un archivo .ics que se importa a Google Calendar. La versión original creaba los eventos directamente en Google Calendar.</p>
+
+<textarea id="txt"></textarea>
+<div>
+  Año: <input id="anio" type="number" value="2026">
+  <button onclick="extraer()">Extraer</button>
+  <button class="alt" onclick="cargarEjemplo()">Cargar ejemplo</button>
+  <button class="alt" id="dl" onclick="descargar()" disabled>Descargar .ics</button>
+</div>
+<div id="out"></div>
+</div>
+
+<script>
+const MESES={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12};
+const DIAS={lunes:'MO',martes:'TU',miércoles:'WE',miercoles:'WE',jueves:'TH',viernes:'FR',sábado:'SA',sabado:'SA'};
+const EJEMPLO=`Física General - FIS 1001
+Horario: Lunes 08:00-09:30 y Miércoles 10:00-11:30
+Tarea 1: 15 de septiembre
+Examen parcial: 06/10
+Proyecto final: 3 de noviembre
+Examen final: 8 de diciembre`;
+let eventos=[],horario=[];
+const pad=n=>String(n).padStart(2,'0');
+function cargarEjemplo(){document.getElementById('txt').value=EJEMPLO}
+function extraer(){
+  const anio=+document.getElementById('anio').value;
+  eventos=[];horario=[];
+  for(const linea of document.getElementById('txt').value.split('\n')){
+    for(const m of linea.matchAll(/(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado)\s+(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/gi))
+      horario.push({dia:m[1],rrule:DIAS[m[1].toLowerCase()],h1:+m[2],m1:+m[3],h2:+m[4],m2:+m[5]});
+    let d=null,mo=null,m;
+    if(m=linea.match(/(\d{1,2})\s+de\s+([a-záéíóú]+)/i)){d=+m[1];mo=MESES[m[2].toLowerCase()]}
+    else if(m=linea.match(/(\d{1,2})\/(\d{1,2})(?!\d)/)){d=+m[1];mo=+m[2]}
+    if(d&&mo){
+      const titulo=linea.replace(/(\d{1,2})\s+de\s+[a-záéíóú]+|(\d{1,2})\/(\d{1,2})/i,'').replace(/[:\-–]\s*$/,'').replace(/[:\-–]\s*/,'').trim()||'Evento';
+      eventos.push({titulo,d,mo,anio});
+    }
+  }
+  render();
+}
+function render(){
+  let h='<h3>Fechas encontradas</h3>';
+  h+=eventos.length?'<table><tr><th>Evento</th><th>Fecha</th></tr>'+eventos.map(e=>`<tr><td>${esc(e.titulo)}</td><td>${pad(e.d)}/${pad(e.mo)}/${e.anio}</td></tr>`).join('')+'</table>':'<p class="muted">Ninguna.</p>';
+  h+='<h3>Horario semanal</h3>';
+  h+=horario.length?'<table><tr><th>Día</th><th>Hora</th></tr>'+horario.map(x=>`<tr><td>${esc(x.dia)}</td><td>${pad(x.h1)}:${pad(x.m1)} - ${pad(x.h2)}:${pad(x.m2)}</td></tr>`).join('')+'</table>':'<p class="muted">Ninguno.</p>';
+  document.getElementById('out').innerHTML=h;
+  document.getElementById('dl').disabled=!(eventos.length||horario.length);
+}
+function esc(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function descargar(){
+  const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Syllabus Reader Demo//ES'];
+  eventos.forEach((e,i)=>{
+    const f=`${e.anio}${pad(e.mo)}${pad(e.d)}`;
+    L.push('BEGIN:VEVENT',`UID:ev${i}-${f}@syllabus-demo`,`DTSTAMP:${f}T000000Z`,`DTSTART;VALUE=DATE:${f}`,`SUMMARY:${e.titulo}`,'END:VEVENT');
+  });
+  const WD={MO:1,TU:2,WE:3,TH:4,FR:5,SA:6};
+  horario.forEach((x,i)=>{
+    const b=new Date(+document.getElementById('anio').value,0,5);
+    while(b.getDay()!==WD[x.rrule])b.setDate(b.getDate()+1);
+    const f=`${b.getFullYear()}${pad(b.getMonth()+1)}${pad(b.getDate())}`;
+    L.push('BEGIN:VEVENT',`UID:hr${i}@syllabus-demo`,`DTSTAMP:${f}T000000Z`,`DTSTART:${f}T${pad(x.h1)}${pad(x.m1)}00`,`DTEND:${f}T${pad(x.h2)}${pad(x.m2)}00`,`RRULE:FREQ=WEEKLY;BYDAY=${x.rrule};COUNT=16`,'SUMMARY:Clase','END:VEVENT');
+  });
+  L.push('END:VCALENDAR');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([L.join('\r\n')],{type:'text/calendar'}));
+  a.download='silabo.ics';a.click();
+}
+cargarEjemplo();
+</script>
+</body>
+</html>
